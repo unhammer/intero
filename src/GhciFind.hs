@@ -10,7 +10,7 @@ module GhciFind
   where
 
 #if __GLASGOW_HASKELL__ >= 800
-import Module
+import           Module
 #endif
 import           Control.Exception
 import           Data.List
@@ -25,6 +25,7 @@ import           GhciInfo (showppr)
 import           GhciTypes
 import           Name
 import           SrcLoc
+import           Debug.Trace
 import           System.Directory
 import           Var
 
@@ -52,10 +53,40 @@ findCompletions infos fp sample sl sc el ec =
                 let toplevelNames =
                       fromMaybe [] (modInfoTopLevelScope (modinfoInfo moduleInf))
                     filteredToplevels =
-                      filter (isPrefixOf sample)
-                             (map (showppr df) toplevelNames)
+                      mapMaybe (matchPrefix df (map unLoc (modinfoImports moduleInf)) sample)
+                               toplevelNames
+                liftIO (putStrLn (showppr df toplevelNames))
                 localNames <- findLocalizedCompletions (modinfoSpans moduleInf) sample sl sc el ec
                 return (Right (take 30 (nub (localNames ++ filteredToplevels))))
+
+-- | Match the sample input against the given name, if it matches,
+-- return either:
+--
+-- 1) The name qualified if the sample input was qualified.
+-- 2) The regular name if the input was not qualified.
+--
+matchPrefix :: DynFlags -> [ImportDecl Name] -> String -> Name -> Maybe String
+matchPrefix df imports sample name =
+  case break (== '.') sample of
+    (qual, '.':sample') ->
+      -- trace ("Qualified: " ++ showppr df name ++ ", " ++ sample ++ ", " ++ showppr df imports)
+      (case find
+              (\decl ->
+                 Just (unLoc (ideclName decl)) ==
+                 fmap moduleName (nameModule_maybe name))
+              imports of
+         Nothing -> Nothing
+         Just decl ->
+           if fmap (showppr df) (ideclAs decl) == Just qual &&
+              isPrefixOf sample' nameString
+             then Just (qual ++ "." ++ nameString)
+             else Nothing)
+    _ ->
+      if isPrefixOf sample nameString
+        then Just nameString
+        else Nothing
+  where
+    nameString = showppr df name
 
 -- | Find completions within the local scope of a definition of a
 -- module.

@@ -366,6 +366,15 @@ completion = do
              (take 2 . lines)
              ["sort", "sortBy"])
         it
+          ":complete-at for locally imported (as X)"
+          (atFile
+             ":complete-at"
+             "X.hs"
+             "module X where\nimport Data.List as X\nx = undefined"
+             (3, 5, 0, 0, "X.sor")
+             (take 2 . lines)
+             ["X.sort", "X.sortBy"])
+        it
           ":complete-at for module-locally defined"
           (atFile
              ":complete-at"
