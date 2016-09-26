@@ -715,11 +715,34 @@ instead of using `eldoc-documentation-function'."
                nil))
          (eldoc-message msg))))
 
+(defun eldoc-intero-response-status (response)
+  "Parse response REPL's RESPONSE for errors.
+
+Like `haskell-utils-repl-response-error-status', but handles
+compilation warnings as errors."
+  (if response
+      (let ((first-line (car (split-string response "\n" t))))
+        (cond
+         ((null first-line) 'no-error)
+         ((string-match-p "^unknown command" first-line)
+          'unknown-command)
+         ((string-match-p
+           "^Couldn't guess that module name. Does it exist?\\|^<no location info>"
+           first-line)
+          'option-missing)
+         ((string-match-p "^<interactive>:" first-line)
+          'interactive-error)
+         ((string-match-p "^\[[0-9]+ of [0-9]+\] Compiling " first-line)
+          'compile-error)
+         (t 'no-error)))
+    ;; in case of nil-ish reponse it's not clear is it error response or not
+    'no-error))
+
 (defun eldoc-intero ()
   "ELDoc backend for intero."
   (apply #'intero-get-type-at-async
          (lambda (beg end ty)
-           (let ((response-status (haskell-utils-repl-response-error-status ty)))
+           (let ((response-status (eldoc-intero-response-status ty)))
              (if (eq 'no-error response-status)
                (let ((msg (intero-fontify-expression
                            (replace-regexp-in-string "[ \n]+" " " ty))))
